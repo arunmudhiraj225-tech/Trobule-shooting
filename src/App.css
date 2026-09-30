@@ -5,8 +5,8 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #f1f5f9;
-  color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 .app {
@@ -17,26 +17,27 @@ body {
 .hero {
   max-width: 900px;
   margin: 0 auto 25px;
-  text-align: center;
   padding: 40px 20px;
-  background: white;
+  text-align: center;
+  background: #1e293b;
   border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
 .hero h1 {
-  margin-bottom: 10px;
+  margin: 0 0 12px;
+  font-size: 32px;
 }
 
 .hero p {
-  color: #64748b;
+  color: #cbd5e1;
+  font-size: 17px;
   margin-bottom: 25px;
 }
 
 button {
+  padding: 12px 22px;
   border: none;
   border-radius: 8px;
-  padding: 12px 20px;
   background: #2563eb;
   color: white;
   font-size: 16px;
@@ -52,13 +53,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.error {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 15px;
+  border-radius: 10px;
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
 .card {
   max-width: 900px;
   margin: 20px auto;
   padding: 25px;
-  background: white;
+  background: #1e293b;
   border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
 .card h2 {
@@ -72,44 +81,37 @@ button:disabled {
 }
 
 .grid div {
-  padding: 15px;
-  background: #f8fafc;
+  padding: 16px;
+  background: #334155;
   border-radius: 10px;
 }
 
 .grid span {
   display: block;
-  color: #64748b;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
+  color: #cbd5e1;
   font-size: 14px;
 }
 
 .grid strong {
-  font-size: 16px;
+  color: white;
 }
 
-.error {
-  max-width: 900px;
-  margin: 20px auto;
-  padding: 15px;
-  border-radius: 10px;
-  background: #fee2e2;
-  color: #991b1b;
+.card li {
+  margin: 10px 0;
+  color: #cbd5e1;
 }
 
 .history {
   margin-top: 15px;
-  padding: 15px;
-  background: #f8fafc;
+  padding: 16px;
+  background: #334155;
   border-radius: 10px;
 }
 
 .history p {
-  margin: 6px 0;
-}
-
-li {
-  margin: 8px 0;
+  color: #cbd5e1;
+  margin: 7px 0;
 }
 
 @media (max-width: 600px) {
@@ -117,12 +119,16 @@ li {
     padding: 15px 10px;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
   .hero {
     padding: 30px 15px;
+  }
+
+  .hero h1 {
+    font-size: 25px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
   }
 
   .card {

@@ -10,11 +10,7 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-// --------------------------------------------------
 // Get local IP
-// Windows + macOS + Linux
-// --------------------------------------------------
-
 function getLocalIP() {
   const interfaces = os.networkInterfaces()
 
@@ -33,10 +29,7 @@ function getLocalIP() {
   return null
 }
 
-// --------------------------------------------------
 // Get default gateway
-// --------------------------------------------------
-
 function getGateway() {
   return new Promise(resolve => {
     const platform = process.platform
@@ -71,7 +64,7 @@ function getGateway() {
       }
 
       // macOS
-      else if (platform === 'darwin') {
+      if (platform === 'darwin') {
         const match = stdout.match(
           /gateway:\s+([0-9.]+)/
         )
@@ -82,7 +75,7 @@ function getGateway() {
       }
 
       // Linux
-      else {
+      if (platform === 'linux') {
         const match = stdout.match(
           /default via ([0-9.]+)/
         )
@@ -97,10 +90,7 @@ function getGateway() {
   })
 }
 
-// --------------------------------------------------
-// Diagnose network
-// --------------------------------------------------
-
+// Main diagnostic API
 app.get('/api/diagnose', async (req, res) => {
   const result = {
     operatingSystem: process.platform,
@@ -121,10 +111,10 @@ app.get('/api/diagnose', async (req, res) => {
     averageLatency: null,
   }
 
-  // 1. Gateway
+  // Gateway
   result.gateway = await getGateway()
 
-  // 2. Gateway ping
+  // Gateway connectivity
   if (result.gateway) {
     try {
       const gatewayPing =
@@ -148,16 +138,15 @@ app.get('/api/diagnose', async (req, res) => {
     }
   }
 
-  // 3. DNS
+  // DNS test
   try {
     await dns.lookup('google.com')
-
     result.dns = true
   } catch (error) {
     result.dns = false
   }
 
-  // 4. Internet
+  // Internet test
   try {
     const response = await fetch(
       'https://www.google.com'
@@ -168,7 +157,7 @@ app.get('/api/diagnose', async (req, res) => {
     result.internet = false
   }
 
-  // 5. Internet ping
+  // Internet ping
   try {
     const pingResult =
       await ping.promise.probe(
@@ -199,10 +188,7 @@ app.get('/api/diagnose', async (req, res) => {
   res.json(result)
 })
 
-// --------------------------------------------------
 // Start server
-// --------------------------------------------------
-
 const PORT = process.env.PORT || 5000
 
 app.listen(PORT, '0.0.0.0', () => {
