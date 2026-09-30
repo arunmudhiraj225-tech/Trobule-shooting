@@ -12,7 +12,7 @@ app.use(express.json())
 
 // --------------------------------------------------
 // Get local IP
-// Works on Windows and macOS
+// Windows + macOS + Linux
 // --------------------------------------------------
 
 function getLocalIP() {
@@ -35,7 +35,6 @@ function getLocalIP() {
 
 // --------------------------------------------------
 // Get default gateway
-// Works on Windows, macOS and Linux
 // --------------------------------------------------
 
 function getGateway() {
@@ -109,7 +108,6 @@ app.get('/api/diagnose', async (req, res) => {
     localIP: getLocalIP(),
 
     gateway: null,
-
     gatewayReachable: null,
     gatewayLatency: null,
 
@@ -123,16 +121,10 @@ app.get('/api/diagnose', async (req, res) => {
     averageLatency: null,
   }
 
-  // ------------------------------------------------
-  // 1. Get gateway
-  // ------------------------------------------------
-
+  // 1. Gateway
   result.gateway = await getGateway()
 
-  // ------------------------------------------------
-  // 2. Test gateway
-  // ------------------------------------------------
-
+  // 2. Gateway ping
   if (result.gateway) {
     try {
       const gatewayPing =
@@ -156,10 +148,7 @@ app.get('/api/diagnose', async (req, res) => {
     }
   }
 
-  // ------------------------------------------------
-  // 3. DNS test
-  // ------------------------------------------------
-
+  // 3. DNS
   try {
     await dns.lookup('google.com')
 
@@ -168,10 +157,7 @@ app.get('/api/diagnose', async (req, res) => {
     result.dns = false
   }
 
-  // ------------------------------------------------
-  // 4. Internet test
-  // ------------------------------------------------
-
+  // 4. Internet
   try {
     const response = await fetch(
       'https://www.google.com'
@@ -182,10 +168,7 @@ app.get('/api/diagnose', async (req, res) => {
     result.internet = false
   }
 
-  // ------------------------------------------------
-  // 5. Ping test
-  // ------------------------------------------------
-
+  // 5. Internet ping
   try {
     const pingResult =
       await ping.promise.probe(

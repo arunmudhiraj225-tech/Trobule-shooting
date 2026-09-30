@@ -1,69 +1,124 @@
 import {useState} from 'react'
 import './App.css'
 
+const API_URL =
+  'https://network-troubleshooting-backend.onrender.com'
+
 function App() {
-  const [diagnosis, setDiagnosis] = useState(null)
-  const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
+  const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [history, setHistory] = useState([])
 
   const diagnoseNetwork = async () => {
     setLoading(true)
     setError('')
-    setDiagnosis(null)
 
     try {
-      const response = await fetch('https://network-troubleshooting-backend.onrender.com/api/diagnose')
+      const response = await fetch(
+        `${API_URL}/api/diagnose`
+      )
 
       if (!response.ok) {
-        throw new Error('Server error')
+        throw new Error(
+          'Unable to connect to diagnostic server'
+        )
       }
 
-      const data = await response.json()
+      const result = await response.json()
 
-      setDiagnosis(data)
+      setData(result)
 
       const historyItem = {
-        id: Date.now(),
         time: new Date().toLocaleString(),
-
-        localIP: data.localIP,
-        gateway: data.gateway,
-
-        gatewayReachable:
-          data.gatewayReachable,
-
-        internet: data.internet,
-        dns: data.dns,
-
-        packetLoss: data.packetLoss,
-        latency: data.averageLatency,
+        ip: result.localIP || 'N/A',
+        gateway: result.gateway || 'N/A',
+        internet: result.internet
+          ? 'Working'
+          : 'Not Working',
+        dns: result.dns
+          ? 'Working'
+          : 'Not Working',
+        packetLoss:
+          result.packetLoss !== null
+            ? `${result.packetLoss}%`
+            : 'N/A',
+        latency:
+          result.averageLatency !== null
+            ? `${result.averageLatency} ms`
+            : 'N/A',
       }
 
-      setHistory(previousHistory => [
+      setHistory(prev => [
         historyItem,
-        ...previousHistory,
+        ...prev,
       ])
-    } catch (error) {
+    } catch (err) {
       setError(
-        'Cannot connect to the diagnostic server. Start the backend server first.'
+        'Cannot connect to the diagnostic server. Please try again.'
       )
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const getDiagnosis = () => {
-    if (!diagnosis) {
+    if (!data) {
       return null
     }
 
-    if (diagnosis.gateway === null) {
+    // Internet problem
+    if (!data.internet) {
+      return {
+        title: '⚠️ Internet Connection Problem',
+        message:
+          'Internet connectivity could not be established.',
+        actions: [
+          'Check your Wi-Fi or Ethernet connection.',
+          'Restart your router.',
+          'Check your network settings.',
+        ],
+      }
+    }
+
+    // DNS problem
+    if (!data.dns) {
+      return {
+        title: '⚠️ DNS Resolution Problem',
+        message:
+          'Internet access is available, but DNS resolution failed.',
+        actions: [
+          'Check your DNS settings.',
+          'Try using a public DNS server.',
+          'Restart your network connection.',
+        ],
+      }
+    }
+
+    // Cloud gateway limitation
+    if (
+      data.gateway === null &&
+      data.operatingSystem === 'linux'
+    ) {
+      return {
+        title: 'ℹ️ Gateway Test Unavailable',
+        message:
+          'The diagnostic server is running in a cloud environment and cannot access the gateway of your personal device.',
+        actions: [
+          'Internet connectivity is working.',
+          'DNS resolution is working.',
+          'Run the backend locally for full gateway testing.',
+        ],
+      }
+    }
+
+    // Local gateway unavailable
+    if (data.gateway === null) {
       return {
         title: '⚠️ Gateway Not Detected',
         message:
           'The default gateway could not be detected.',
-        recommendations: [
+        actions: [
           'Check your Wi-Fi or Ethernet connection.',
           'Check your network settings.',
           'Reconnect to the network.',
@@ -71,129 +126,57 @@ function App() {
       }
     }
 
-    if (!diagnosis.gatewayReachable) {
+    // Gateway unreachable
+    if (data.gatewayReachable === false) {
       return {
         title: '⚠️ Gateway Not Reachable',
         message:
-          'The computer could not communicate with the default gateway.',
-        recommendations: [
-          'Check your Wi-Fi connection.',
-          'Reconnect to the network.',
-          'Move closer to the router.',
-          'Restart the router if necessary.',
+          'The default gateway was detected but could not be reached.',
+        actions: [
+          'Check your Wi-Fi or Ethernet connection.',
+          'Restart your router.',
+          'Check your network configuration.',
         ],
       }
     }
 
-    if (diagnosis.packetLoss >= 50) {
-      return {
-        title: '⚠️ High Packet Loss',
-        message:
-          'A large percentage of packets were lost.',
-        recommendations: [
-          'Check Wi-Fi signal strength.',
-          'Move closer to the router.',
-          'Disconnect unused devices.',
-          'Test the connection again.',
-        ],
-      }
-    }
-
-    if (diagnosis.packetLoss > 0) {
-      return {
-        title: '⚠️ Packet Loss Detected',
-        message:
-          'Some packets were lost during the test.',
-        recommendations: [
-          'Check Wi-Fi signal strength.',
-          'Reconnect to the network.',
-          'Check network usage by other devices.',
-          'Run the test again.',
-        ],
-      }
-    }
-
-    if (
-      diagnosis.averageLatency !== null &&
-      diagnosis.averageLatency > 200
-    ) {
-      return {
-        title: '⚠️ High Network Latency',
-        message:
-          'The average network response time is high.',
-        recommendations: [
-          'Check whether other devices are using heavy bandwidth.',
-          'Move closer to the router.',
-          'Reconnect to the network.',
-          'Run the test again.',
-        ],
-      }
-    }
-
-    if (!diagnosis.internet) {
-      return {
-        title: '⚠️ Internet Connectivity Problem',
-        message:
-          'The local network is reachable, but Internet connectivity failed.',
-        recommendations: [
-          'Check your Internet connection.',
-          'Restart the router if necessary.',
-          'Check another device on the same network.',
-        ],
-      }
-    }
-
-    if (!diagnosis.dns) {
-      return {
-        title: '⚠️ Possible DNS Problem',
-        message:
-          'Internet connectivity is available, but DNS resolution failed.',
-        recommendations: [
-          'Check your DNS configuration.',
-          'Reconnect to the network.',
-          'Try another DNS server.',
-        ],
-      }
-    }
-
+    // Everything working
     return {
-      title: '✓ Network Checks Passed',
+      title: '✅ Network Working Normally',
       message:
-        'The basic network tests completed successfully.',
-      recommendations: [
-        'Local network connectivity is working.',
+        'Your network connectivity tests completed successfully.',
+      actions: [
         'Internet connectivity is working.',
         'DNS resolution is working.',
-        'No significant packet loss was detected.',
+        'The default gateway is reachable.',
       ],
     }
   }
 
-  const diagnosisResult = getDiagnosis()
+  const diagnosis = getDiagnosis()
 
   return (
     <div className="app">
 
-      <div className="header">
+      <header className="hero">
         <h1>
           Network Troubleshooting Assistant
         </h1>
 
         <p>
-          Diagnose common network problems using
-          real network tests.
+          Diagnose common network problems using real
+          network tests.
         </p>
-      </div>
 
-      <button
-        className="diagnose-button"
-        onClick={diagnoseNetwork}
-        disabled={loading}
-      >
-        {loading
-          ? 'Checking Network...'
-          : '🔍 Diagnose My Network'}
-      </button>
+        <button
+          onClick={diagnoseNetwork}
+          disabled={loading}
+        >
+          {loading
+            ? 'Testing Network...'
+            : '🔍 Diagnose My Network'}
+        </button>
+      </header>
 
       {error && (
         <div className="error">
@@ -201,160 +184,123 @@ function App() {
         </div>
       )}
 
-      {loading && (
-        <div className="loading">
-          <p>
-            Running network diagnostics...
-          </p>
-          <p>
-            Please wait.
-          </p>
-        </div>
-      )}
-
-      {diagnosis && !loading && (
+      {data && (
         <>
-          <div className="result-card">
+          <section className="card">
 
-            <h2>
-              Network Diagnosis
-            </h2>
+            <h2>Network Diagnosis</h2>
 
-            <div className="diagnostic-row">
-              <span>Local IP Address</span>
-              <strong>
-                {diagnosis.localIP ||
-                  'Not detected'}
-              </strong>
+            <div className="grid">
+
+              <div>
+                <span>Operating System</span>
+                <strong>
+                  {data.operatingSystem}
+                </strong>
+              </div>
+
+              <div>
+                <span>Local IP Address</span>
+                <strong>
+                  {data.localIP || 'Not detected'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Default Gateway</span>
+                <strong>
+                  {data.gateway || 'Not detected'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Gateway Connectivity</span>
+                <strong>
+                  {data.gatewayReachable === null
+                    ? 'Not available'
+                    : data.gatewayReachable
+                    ? '✓ Reachable'
+                    : '✗ Not Reachable'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Gateway Latency</span>
+                <strong>
+                  {data.gatewayLatency !== null
+                    ? `${data.gatewayLatency} ms`
+                    : 'Not available'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Internet Connectivity</span>
+                <strong>
+                  {data.internet
+                    ? '✓ Working'
+                    : '✗ Not Working'}
+                </strong>
+              </div>
+
+              <div>
+                <span>DNS Resolution</span>
+                <strong>
+                  {data.dns
+                    ? '✓ Working'
+                    : '✗ Not Working'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Packets Sent</span>
+                <strong>
+                  {data.pingPacketsSent}
+                </strong>
+              </div>
+
+              <div>
+                <span>Packets Received</span>
+                <strong>
+                  {data.pingPacketsReceived !== null
+                    ? data.pingPacketsReceived
+                    : 'Not available'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Packet Loss</span>
+                <strong>
+                  {data.packetLoss !== null
+                    ? `${data.packetLoss}%`
+                    : 'Not available'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Average Latency</span>
+                <strong>
+                  {data.averageLatency !== null
+                    ? `${data.averageLatency} ms`
+                    : 'Not available'}
+                </strong>
+              </div>
+
             </div>
+          </section>
 
-            <div className="diagnostic-row">
-              <span>Default Gateway</span>
-              <strong>
-                {diagnosis.gateway ||
-                  'Not detected'}
-              </strong>
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Gateway Connectivity
-              </span>
-
-              {diagnosis.gatewayReachable ? (
-                <span className="success">
-                  ✓ Reachable
-                </span>
-              ) : (
-                <span className="failure">
-                  ✗ Not Reachable
-                </span>
-              )}
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Gateway Latency
-              </span>
-
-              <strong>
-                {diagnosis.gatewayLatency !== null
-                  ? `${diagnosis.gatewayLatency} ms`
-                  : 'Not available'}
-              </strong>
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Internet Connectivity
-              </span>
-
-              {diagnosis.internet ? (
-                <span className="success">
-                  ✓ Working
-                </span>
-              ) : (
-                <span className="failure">
-                  ✗ Failed
-                </span>
-              )}
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                DNS Resolution
-              </span>
-
-              {diagnosis.dns ? (
-                <span className="success">
-                  ✓ Working
-                </span>
-              ) : (
-                <span className="failure">
-                  ✗ Failed
-                </span>
-              )}
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Packets Sent
-              </span>
-
-              <strong>
-                {diagnosis.pingPacketsSent}
-              </strong>
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Packets Received
-              </span>
-
-              <strong>
-                {diagnosis.pingPacketsReceived}
-              </strong>
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Packet Loss
-              </span>
-
-              <strong>
-                {diagnosis.packetLoss !== null
-                  ? `${diagnosis.packetLoss}%`
-                  : 'Not available'}
-              </strong>
-            </div>
-
-            <div className="diagnostic-row">
-              <span>
-                Average Latency
-              </span>
-
-              <strong>
-                {diagnosis.averageLatency !== null
-                  ? `${diagnosis.averageLatency} ms`
-                  : 'Not available'}
-              </strong>
-            </div>
-
-          </div>
-
-          {diagnosisResult && (
-            <div className="diagnosis-message">
+          {diagnosis && (
+            <section className="card">
 
               <h2>
                 Diagnosis & Recommendation
               </h2>
 
               <h3>
-                {diagnosisResult.title}
+                {diagnosis.title}
               </h3>
 
               <p>
-                {diagnosisResult.message}
+                {diagnosis.message}
               </p>
 
               <h4>
@@ -362,106 +308,74 @@ function App() {
               </h4>
 
               <ul>
-                {diagnosisResult.recommendations.map(
-                  (item, index) => (
+                {diagnosis.actions.map(
+                  (action, index) => (
                     <li key={index}>
-                      {item}
+                      {action}
                     </li>
                   )
                 )}
               </ul>
 
-            </div>
+              <button
+                onClick={diagnoseNetwork}
+                disabled={loading}
+              >
+                🔄 Test Again
+              </button>
+
+            </section>
           )}
 
-          <button
-            className="test-button"
-            onClick={diagnoseNetwork}
-          >
-            🔄 Test Again
-          </button>
+          <section className="card">
+
+            <h2>
+              📋 Troubleshooting History
+            </h2>
+
+            {history.length === 0 ? (
+              <p>
+                No tests performed yet.
+              </p>
+            ) : (
+              history.map((item, index) => (
+                <div
+                  className="history"
+                  key={index}
+                >
+                  <strong>
+                    {item.time}
+                  </strong>
+
+                  <p>
+                    IP: {item.ip}
+                  </p>
+
+                  <p>
+                    Gateway: {item.gateway}
+                  </p>
+
+                  <p>
+                    Internet: {item.internet}
+                  </p>
+
+                  <p>
+                    DNS: {item.dns}
+                  </p>
+
+                  <p>
+                    Packet Loss: {item.packetLoss}
+                  </p>
+
+                  <p>
+                    Latency: {item.latency}
+                  </p>
+                </div>
+              ))
+            )}
+
+          </section>
         </>
-      )}
-
-      {history.length > 0 && (
-        <div className="history-card">
-
-          <h2>
-            📋 Troubleshooting History
-          </h2>
-
-          {history.map(item => (
-            <div
-              className="history-item"
-              key={item.id}
-            >
-
-              <div className="history-header">
-
-                <strong>
-                  {item.time}
-                </strong>
-
-                {item.internet &&
-                item.dns &&
-                item.packetLoss === 0 ? (
-                  <span className="success">
-                    ✓ Healthy
-                  </span>
-                ) : (
-                  <span className="failure">
-                    ⚠ Problem Detected
-                  </span>
-                )}
-
-              </div>
-
-              <div className="history-details">
-
-                <p>
-                  <strong>IP:</strong>{' '}
-                  {item.localIP || 'N/A'}
-                </p>
-
-                <p>
-                  <strong>Gateway:</strong>{' '}
-                  {item.gateway || 'N/A'}
-                </p>
-
-                <p>
-                  <strong>Internet:</strong>{' '}
-                  {item.internet
-                    ? 'Working'
-                    : 'Failed'}
-                </p>
-
-                <p>
-                  <strong>DNS:</strong>{' '}
-                  {item.dns
-                    ? 'Working'
-                    : 'Failed'}
-                </p>
-
-                <p>
-                  <strong>Packet Loss:</strong>{' '}
-                  {item.packetLoss !== null
-                    ? `${item.packetLoss}%`
-                    : 'N/A'}
-                </p>
-
-                <p>
-                  <strong>Latency:</strong>{' '}
-                  {item.latency !== null
-                    ? `${item.latency} ms`
-                    : 'N/A'}
-                </p>
-
-              </div>
-
-            </div>
-          ))}
-
-        </div>
       )}
 
     </div>
