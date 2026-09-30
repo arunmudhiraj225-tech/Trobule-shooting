@@ -13,9 +13,7 @@ function App() {
     setDiagnosis(null)
 
     try {
-      const response = await fetch(
-        'http://localhost:5000/api/diagnose'
-      )
+      const response = await fetch('https://network-troubleshooting-backend.onrender.com/api/diagnose')
 
       if (!response.ok) {
         throw new Error('Server error')

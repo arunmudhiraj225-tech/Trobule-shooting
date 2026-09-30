@@ -11,99 +11,89 @@ app.use(cors())
 app.use(express.json())
 
 // --------------------------------------------------
-// Get local IP and default gateway
-// Works on Windows and macOS
+// Get local IP
 // --------------------------------------------------
 
-function getNetworkInfo() {
-  return new Promise(resolve => {
-    const isWindows = process.platform === 'win32'
+function getLocalIP() {
+  const interfaces = os.networkInterfaces()
 
-    const command = isWindows
-      ? 'ipconfig'
-      : 'route -n get default'
+  for (const name of Object.keys(interfaces)) {
+    for (const network of interfaces[name]) {
+      const family = network.family
+
+      if (
+        (family === 'IPv4' || family === 4) &&
+        !network.internal
+      ) {
+        return network.address
+      }
+    }
+  }
+
+  return null
+}
+
+// --------------------------------------------------
+// Get default gateway
+// Works on Windows, macOS and Linux
+// --------------------------------------------------
+
+function getGateway() {
+  return new Promise(resolve => {
+    const platform = process.platform
+
+    let command
+
+    if (platform === 'win32') {
+      command = 'ipconfig'
+    } else if (platform === 'darwin') {
+      command = 'route -n get default'
+    } else {
+      command = 'ip route'
+    }
 
     exec(command, (error, stdout) => {
       if (error) {
-        resolve({
-          localIP: null,
-          gateway: null,
-        })
+        resolve(null)
         return
       }
 
-      let localIP = null
       let gateway = null
 
-      // -----------------------------
-      // WINDOWS
-      // -----------------------------
-
-      if (isWindows) {
-        const gatewayMatch = stdout.match(
+      // Windows
+      if (platform === 'win32') {
+        const match = stdout.match(
           /Default Gateway[ .]*:\s*([0-9.]+)/
         )
 
-        const ipMatches = [
-          ...stdout.matchAll(
-            /IPv4 Address[ .]*:\s*([0-9.]+)/g
-          ),
-        ]
-
-        gateway = gatewayMatch
-          ? gatewayMatch[1]
-          : null
-
-        if (ipMatches.length > 0) {
-          localIP = ipMatches[0][1]
+        if (match) {
+          gateway = match[1]
         }
       }
 
-      // -----------------------------
-      // MACOS
-      // -----------------------------
-
-      else {
-        const gatewayMatch = stdout.match(
+      // macOS
+      else if (platform === 'darwin') {
+        const match = stdout.match(
           /gateway:\s+([0-9.]+)/
         )
 
-        const interfaceMatch = stdout.match(
-          /interface:\s+(\S+)/
-        )
-
-        gateway = gatewayMatch
-          ? gatewayMatch[1]
-          : null
-
-        const interfaces = os.networkInterfaces()
-
-        if (interfaceMatch) {
-          const interfaceName =
-            interfaceMatch[1]
-
-          const networkInterface =
-            interfaces[interfaceName]
-
-          if (networkInterface) {
-            const ipv4 =
-              networkInterface.find(
-                network =>
-                  network.family === 'IPv4' &&
-                  !network.internal
-              )
-
-            if (ipv4) {
-              localIP = ipv4.address
-            }
-          }
+        if (match) {
+          gateway = match[1]
         }
       }
 
-      resolve({
-        localIP,
-        gateway,
-      })
+      // Linux
+      else {
+        const match = stdout.match(
+          /default via ([0-9.]+)/
+        )
+
+        if (match) {
+          gateway = match[1]
+        }
+      }
+
+      resolve(gateway)
     })
   })
 }
@@ -114,33 +104,33 @@ function getNetworkInfo() {
 
 app.get('/api/diagnose', async (req, res) => {
   const result = {
-    localIP: null,
+    operatingSystem: process.platform,
+
+    localIP: getLocalIP(),
+
     gateway: null,
 
-    gatewayReachable: false,
+    gatewayReachable: null,
     gatewayLatency: null,
 
     internet: false,
     dns: false,
 
     pingPacketsSent: 5,
-    pingPacketsReceived: 0,
+    pingPacketsReceived: null,
 
     packetLoss: null,
     averageLatency: null,
   }
 
   // ------------------------------------------------
-  // 1. Local IP + Gateway
+  // 1. Gateway
   // ------------------------------------------------
 
-  const networkInfo = await getNetworkInfo()
-
-  result.localIP = networkInfo.localIP
-  result.gateway = networkInfo.gateway
+  result.gateway = await getGateway()
 
   // ------------------------------------------------
-  // 2. Gateway test
+  // 2. Gateway ping
   // ------------------------------------------------
 
   if (result.gateway) {
@@ -156,10 +146,12 @@ app.get('/api/diagnose', async (req, res) => {
       result.gatewayReachable =
         gatewayPing.alive
 
-      result.gatewayLatency =
+      if (
         gatewayPing.avg !== 'unknown'
-          ? Number(gatewayPing.avg)
-          : null
+      ) {
+        result.gatewayLatency =
+          Number(gatewayPing.avg)
+      }
     } catch (error) {
       result.gatewayReachable = false
       result.gatewayLatency = null
@@ -193,7 +185,7 @@ app.get('/api/diagnose', async (req, res) => {
   }
 
   // ------------------------------------------------
-  // 5. Ping test
+  // 5. Internet ping
   // ------------------------------------------------
 
   try {
@@ -206,19 +198,27 @@ app.get('/api/diagnose', async (req, res) => {
         }
       )
 
-    result.pingPacketsReceived =
-      pingResult.alive ? 5 : 0
+    if (pingResult.alive) {
+      result.pingPacketsReceived = 5
 
-    result.packetLoss =
-      Number(pingResult.packetLoss)
+      result.packetLoss =
+        Number(pingResult.packetLoss)
 
-    result.averageLatency =
-      pingResult.avg !== 'unknown'
-        ? Number(pingResult.avg)
-        : null
+      if (
+        pingResult.avg !== 'unknown'
+      ) {
+        result.averageLatency =
+          Number(pingResult.avg)
+      }
+    } else {
+      // ICMP may be blocked by hosting providers
+      result.pingPacketsReceived = null
+      result.packetLoss = null
+      result.averageLatency = null
+    }
   } catch (error) {
-    result.pingPacketsReceived = 0
-    result.packetLoss = 100
+    result.pingPacketsReceived = null
+    result.packetLoss = null
     result.averageLatency = null
   }
 
@@ -232,6 +232,11 @@ app.get('/api/diagnose', async (req, res) => {
 const PORT = process.env.PORT || 5000
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Network Troubleshooting Server running on port ${PORT}`)
-  console.log(`Operating System: ${process.platform}`)
+  console.log(
+    `Network Troubleshooting Server running on port ${PORT}`
+  )
+
+  console.log(
+    `Operating System: ${process.platform}`
+  )
 })
