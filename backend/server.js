@@ -12,6 +12,7 @@ app.use(express.json())
 
 // --------------------------------------------------
 // Get local IP
+// Works on Windows and macOS
 // --------------------------------------------------
 
 function getLocalIP() {
@@ -19,12 +20,11 @@ function getLocalIP() {
 
   for (const name of Object.keys(interfaces)) {
     for (const network of interfaces[name]) {
-      const family = network.family
+      const isIPv4 =
+        network.family === 'IPv4' ||
+        network.family === 4
 
-      if (
-        (family === 'IPv4' || family === 4) &&
-        !network.internal
-      ) {
+      if (isIPv4 && !network.internal) {
         return network.address
       }
     }
@@ -124,13 +124,13 @@ app.get('/api/diagnose', async (req, res) => {
   }
 
   // ------------------------------------------------
-  // 1. Gateway
+  // 1. Get gateway
   // ------------------------------------------------
 
   result.gateway = await getGateway()
 
   // ------------------------------------------------
-  // 2. Gateway ping
+  // 2. Test gateway
   // ------------------------------------------------
 
   if (result.gateway) {
@@ -146,9 +146,7 @@ app.get('/api/diagnose', async (req, res) => {
       result.gatewayReachable =
         gatewayPing.alive
 
-      if (
-        gatewayPing.avg !== 'unknown'
-      ) {
+      if (gatewayPing.avg !== 'unknown') {
         result.gatewayLatency =
           Number(gatewayPing.avg)
       }
@@ -185,7 +183,7 @@ app.get('/api/diagnose', async (req, res) => {
   }
 
   // ------------------------------------------------
-  // 5. Internet ping
+  // 5. Ping test
   // ------------------------------------------------
 
   try {
@@ -204,17 +202,10 @@ app.get('/api/diagnose', async (req, res) => {
       result.packetLoss =
         Number(pingResult.packetLoss)
 
-      if (
-        pingResult.avg !== 'unknown'
-      ) {
+      if (pingResult.avg !== 'unknown') {
         result.averageLatency =
           Number(pingResult.avg)
       }
-    } else {
-      // ICMP may be blocked by hosting providers
-      result.pingPacketsReceived = null
-      result.packetLoss = null
-      result.averageLatency = null
     }
   } catch (error) {
     result.pingPacketsReceived = null
